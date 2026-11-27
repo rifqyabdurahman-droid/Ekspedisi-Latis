@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08231E">
+<title>Scan Kartu · Arsip Latis</title>
+<style>
+:root{
+  --bg:#08231E; --bg-2:#0E3A31; --gold:#EDB66A; --gold-deep:#C98F3E;
+  --cream:#FFF4DE; --mute:#9DB8AE; --jade:#2E8F6C;
+  --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg)}
+/* body HARUS transparan: video kamera MindAR berada di z-index negatif dan akan tertutup jika body punya warna latar */
+html,body{height:100%;overflow:hidden}
+body{background:transparent;color:var(--cream);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:700;letter-spacing:.01em}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+
+a-scene{position:fixed!important;inset:0;z-index:0}
+.layer{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;
+  padding:calc(var(--safe-t) + 12px) 20px calc(var(--safe-b) + 20px)}
+.hidden{display:none!important}
+
+/* Bar atas */
+.bar{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;height:56px}
+.bar h2{font-size:17px;text-align:center}
+.icon-btn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+  background:rgba(8,35,30,.62);border:1px solid rgba(237,182,106,.45);backdrop-filter:blur(6px)}
+.icon-btn svg{width:20px;height:20px;stroke:var(--gold);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* Bingkai pemindai */
+.frame{position:relative;width:min(68vw,300px);aspect-ratio:5/7;margin:0 auto}
+.frame i{position:absolute;width:34px;height:34px;border:4px solid var(--gold);border-radius:6px}
+.frame i:nth-child(1){top:0;left:0;border-right:0;border-bottom:0}
+.frame i:nth-child(2){top:0;right:0;border-left:0;border-bottom:0}
+.frame i:nth-child(3){bottom:0;left:0;border-right:0;border-top:0}
+.frame i:nth-child(4){bottom:0;right:0;border-left:0;border-top:0}
+.frame.sweep::after{content:"";position:absolute;left:8%;right:8%;height:2px;top:0;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);animation:sweep 2.4s ease-in-out infinite}
+@keyframes sweep{0%,100%{top:6%}50%{top:94%}}
+.frame.ok i{border-color:#7BE0B0}
+
+.pill{display:flex;gap:10px;align-items:center;margin:0 auto;max-width:360px;padding:11px 16px;
+  border-radius:14px;background:rgba(8,35,30,.72);border:1px solid rgba(237,182,106,.28);
+  font-size:12.5px;line-height:1.4;color:var(--cream);backdrop-filter:blur(6px)}
+.pill svg{flex:none;width:20px;height:20px;fill:var(--gold)}
+
+.btn{display:block;margin:0 auto;padding:13px 30px;border-radius:999px;background:var(--gold);
+  color:#2A1B05;font-weight:700;font-size:15px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.btn:active{transform:scale(.97)}
+
+/* Layar tips */
+#intro{background:radial-gradient(120% 80% at 50% 20%,var(--bg-2),var(--bg) 70%);align-items:stretch}
+#intro .head{text-align:center;margin-top:18px}
+#intro h1{font-size:30px;line-height:1.2;max-width:12ch;margin:0 auto 10px}
+#intro .head p{font-size:13px;color:var(--mute)}
+#intro .mid{flex:1;display:flex;flex-direction:column;justify-content:center;gap:22px}
+
+/* HUD scan */
+#hud{pointer-events:none;justify-content:space-between}
+#hud .bar,#hud .dock,#hud .pill{pointer-events:auto}
+#hud .bar{background:none}
+#hud .mid{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px;pointer-events:none}
+.dock{display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:10px}
+.shutter{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;background:var(--gold);
+  border:5px solid rgba(255,244,222,.9);box-shadow:0 8px 24px rgba(0,0,0,.45);transition:opacity .2s,filter .2s}
+.shutter svg{width:34px;height:34px;stroke:#2A1B05;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.shutter:disabled{opacity:.45;filter:grayscale(.6);cursor:not-allowed}
+.dock b{font-size:14px;font-weight:600}
+.dock small{font-size:12px;color:var(--mute);min-height:1.2em}
+
+/* Bottom sheet */
+#sheet{position:fixed;inset:0;z-index:30;display:flex;align-items:flex-end;background:rgba(3,14,12,.55)}
+.sheet-card{width:100%;padding:26px 24px calc(var(--safe-b) + 24px);border-radius:24px 24px 0 0;
+  background:var(--bg-2);border-top:1px solid rgba(237,182,106,.4);animation:up .28s ease-out}
+.sheet-card h2{font-size:21px;margin-bottom:8px}
+.sheet-card p{font-size:14px;line-height:1.55;color:var(--mute);margin-bottom:20px;max-width:46ch}
+.sheet-card .btn{margin:0;width:100%}
+@keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+#debug{position:fixed;left:8px;right:8px;top:calc(var(--safe-t) + 66px);z-index:40;max-height:30vh;overflow:auto;
+  padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.72);color:#9FE8C0;
+  font:10.5px/1.35 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.frame.sweep::after{animation:none}.sheet-card{animation:none}}
+</style>
+</head>
+<body>
+
+<!-- ====== SCENE AR ====== -->
+<template id="scene-tpl">
+<a-scene id="scene"
+  mindar-image="imageTargetSrc: ./assets/targets.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no; maxTrack: 1;"
+  color-space="sRGB" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+  <a-assets>
+    <a-asset-item id="arca" src="./assets/model.glb"></a-asset-item>
+  </a-assets>
+  <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false; rayOrigin: mouse"></a-camera>
+  <a-light type="ambient" intensity="1.2"></a-light>
+  <a-light type="directional" position="1 2 3" intensity="1.4"></a-light>
+
+  <!-- Target 0 -->
+  <a-entity mindar-image-target="targetIndex: 0" id="target0">
+    <a-entity rotation="90 0 0">
+      <a-gltf-model class="arca" src="#arca" position="0 0.23 0.0" scale="0.4 0.4 0.4"
+        animation__spin="property: rotation; from: 0 0 0; to: 0 360 0; dur: 10000; easing: linear; loop: true"></a-gltf-model>
+    </a-entity>
+  </a-entity>
+
+  <!-- Target 1 -->
+  <a-entity mindar-image-target="targetIndex: 1" id="target1">
+    <a-entity rotation="90 0 0">
+      <a-gltf-model class="arca" src="#arca" position="0 0.23 0.0" scale="0.4 0.4 0.4"
+        animation__spin="property: rotation; from: 0 0 0; to: 0 360 0; dur: 10000; easing: linear; loop: true"></a-gltf-model>
+    </a-entity>
+  </a-entity>
+</a-scene>
+</template>
+
+<!-- ====== LAYAR 1: TIPS ====== -->
+<main id="intro" class="layer">
+  <div class="bar">
+    <button class="icon-btn" id="back1" aria-label="Kembali"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h2>Tips Scan Kartu</h2>
+    <span></span>
+  </div>
+  <div class="head">
+    <h1>Arahkan kamera ke kartu</h1>
+    <p>Posisikan seluruh kartu di dalam bingkai</p>
+  </div>
+  <div class="mid">
+    <div class="frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div class="pill">
+      <svg viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
+      <span>Cahaya kurang? Pastikan kartu terlihat jelas.</span>
+    </div>
+  </div>
+  <button class="btn" id="start">Pindai Sekarang</button>
+</main>
+
+<!-- ====== LAYAR 2: SCAN ====== -->
+<section id="hud" class="layer hidden">
+  <div class="bar">
+    <button class="icon-btn" id="back2" aria-label="Kembali"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <h2>Scan Kartu</h2>
+    <span></span>
+  </div>
+  <div class="mid">
+    <div class="frame sweep" id="frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  </div>
+  <div>
+    <div class="pill" style="margin-bottom:14px">
+      <svg viewBox="0 0 24 24"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"/></svg>
+      <span>Mau tahu detail kartu kamu? Identifikasi kartu untuk melihat detailnya.</span>
+    </div>
+    <div class="dock">
+      <button class="shutter" id="identify" disabled aria-label="Identifikasi kartu">
+        <svg viewBox="0 0 24 24"><path d="M4 9V6a2 2 0 012-2h3M15 4h3a2 2 0 012 2v3M20 15v3a2 2 0 01-2 2h-3M9 20H6a2 2 0 01-2-2v-3M8 12h8"/></svg>
+      </button>
+      <b>Identifikasi Kartu</b>
+      <small id="status" role="status" aria-live="polite">Mencari kartu…</small>
+    </div>
+  </div>
+</section>
+
+<!-- ====== SHEET PESAN ====== -->
+<div id="sheet" class="hidden" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+  <div class="sheet-card">
+    <h2 id="sheet-title"></h2>
+    <p id="sheet-body"></p>
+    <button class="btn" id="sheet-btn"></button>
+  </div>
+</div>
+
+<pre id="debug" hidden></pre>
+
+<script>
+/* ============ PENGATURAN — ubah di sini ============ */
+const CONFIG = {
+  homeUrl: "index.html",          // tujuan tombol kembali
+  detailUrl: "",                  // contoh: "detail.html" -> membuka detail.html?id=<id kartu>
+  debug: true,                    // true = tampilkan log langkah di layar (ubah ke false saat rilis)
+  notFoundAfterMs: 15000,         // lama mencari sebelum muncul pesan "Kartu belum terdeteksi"
+  cards: [                        // urutan = urutan gambar saat compile targets.mind
+    { id: "kartu-1", name: "Kartu 1" },   // targetIndex 0
+    { id: "kartu-2", name: "Kartu 2" }    // targetIndex 1
+  ]
+};
+/* ================================================== */
+
+const $ = id => document.getElementById(id);
+let sceneEl = null;
+let started = false, activeIndex = null, notFoundTimer = null;
+const visible = new Set();
+
+function go(url){ if (url) location.href = url; else history.back(); }
+$("back1").onclick = $("back2").onclick = () => { stopAR(); go(CONFIG.homeUrl); };
+
+function showSheet(title, body, label, action){
+  $("sheet-title").textContent = title;
+  $("sheet-body").textContent = body;
+  const b = $("sheet-btn"); b.textContent = label;
+  b.onclick = () => { $("sheet").classList.add("hidden"); action && action(); };
+  $("sheet").classList.remove("hidden"); b.focus();
+}
+
+function armTimer(){
+  clearTimeout(notFoundTimer);
+  notFoundTimer = setTimeout(() => {
+    if (!visible.size)
+      showSheet("Kartu belum terdeteksi",
+        "Pastikan seluruh kartu terlihat jelas dan cahaya cukup, lalu arahkan kamera sekali lagi.",
+        "Coba lagi", armTimer);
+  }, CONFIG.notFoundAfterMs);
+}
+
+function setFound(){
+  const ok = visible.size > 0;
+  $("identify").disabled = !ok;
+  $("frame").classList.toggle("ok", ok);
+  $("frame").classList.toggle("sweep", !ok);
+  $("status").textContent = ok ? (CONFIG.cards[activeIndex]?.name || "Kartu") + " terdeteksi" : "Mencari kartu…";
+  if (ok) clearTimeout(notFoundTimer); else if (started) armTimer();
+}
+
+function wireTargets(){
+[0,1].forEach(i => {
+  const t = $("target" + i);
+  t.addEventListener("targetFound", () => {
+    visible.add(i); activeIndex = i;
+    const m = t.querySelector(".arca");           // animasi muncul
+    m.removeAttribute("animation__pop");
+    m.setAttribute("animation__pop", "property: scale; from: 0.001 0.001 0.001; to: 0.4 0.4 0.4; dur: 500; easing: easeOutBack");
+    setFound();
+  });
+  t.addEventListener("targetLost", () => {
+    visible.delete(i);
+    activeIndex = visible.size ? [...visible].pop() : activeIndex;
+    setFound();
+  });
+});
+}
+
+/* ---- log di layar (matikan dengan CONFIG.debug = false) ---- */
+const dbg = $("debug");
+function log(m){ console.log("[AR]", m); if (CONFIG.debug){ dbg.hidden = false; dbg.textContent += m + "\n"; dbg.scrollTop = dbg.scrollHeight; } }
+window.addEventListener("error", e => log("ERROR: " + (e.message || e.type)));
+window.addEventListener("unhandledrejection", e => log("REJECT: " + ((e.reason && (e.reason.message || e.reason.name)) || e.reason)));
+const withTimeout = (p, ms, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout:" + label)), ms))]);
+
+let failed = false;
+function fail(title, body){
+  if (failed) return; failed = true; started = false;
+  stopAR(); $("hud").classList.add("hidden"); $("intro").classList.remove("hidden");
+  showSheet(title, body, "Mengerti", () => { failed = false; });
+}
+function explain(e){
+  const n = (e && e.name) || "", m = (e && e.message) || "";
+  if (n === "NotAllowedError" || n === "SecurityError") return ["Izin kamera ditolak", "Buka pengaturan situs di browser (ikon gembok di samping alamat), izinkan Kamera, lalu muat ulang halaman."];
+  if (n === "NotFoundError" || n === "OverconstrainedError") return ["Kamera tidak ditemukan", "Perangkat ini tidak punya kamera belakang yang bisa dipakai browser."];
+  if (n === "NotReadableError") return ["Kamera sedang dipakai", "Tutup aplikasi lain yang memakai kamera, lalu coba lagi."];
+  if (m === "timeout:izin-kamera") return ["Izin kamera belum dijawab", "Permintaan izin kamera tidak muncul atau belum dijawab. Periksa pengaturan kamera browser, lalu muat ulang halaman."];
+  if (m.startsWith("timeout:")) return ["Memuat AR terlalu lama", "Koneksi mungkin lambat atau ada file yang gagal dimuat. Muat ulang halaman dan coba lagi."];
+  if (m.startsWith("no-mediadevices")) return ["Browser tidak mendukung kamera", "Buka halaman ini lewat HTTPS di Chrome atau Safari versi terbaru."];
+  return ["Kamera tidak bisa dibuka", "Muat ulang halaman dan coba lagi. Jika masih gagal, kirim tangkapan layar log kepada pengembang."];
+}
+
+function wireScene(){ sceneEl.addEventListener("arError", () => { log("arError dari MindAR"); fail("Kamera tidak bisa dibuka", "Izinkan akses kamera untuk situs ini di pengaturan browser, lalu muat ulang halaman."); }); }
+
+async function startAR(){
+  $("start").disabled = true; failed = false;
+  $("intro").classList.add("hidden"); $("hud").classList.remove("hidden");
+  $("status").textContent = "Membuka kamera…";
+  try {
+    if (!sceneEl) throw new Error("lib-belum-siap");
+    log("secure=" + window.isSecureContext + " scene=" + sceneEl.hasLoaded);
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("no-mediadevices secure=" + window.isSecureContext);
+    log("1/4 meminta izin kamera…");
+    const stream = await withTimeout(navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }), 20000, "izin-kamera");
+    stream.getTracks().forEach(t => t.stop());
+    log("2/4 kamera diizinkan");
+    if (!sceneEl.hasLoaded) await withTimeout(new Promise(r => sceneEl.addEventListener("loaded", r, { once:true })), 15000, "scene");
+    log("3/4 scene siap, memuat marker…");
+    const sys = sceneEl.systems["mindar-image-system"];
+    await withTimeout(sys.start(), 45000, "mindar-start");
+    started = true; armTimer(); log("4/4 AR berjalan");
+    $("status").textContent = "Mencari kartu…";
+  } catch (e) {
+    log("GAGAL: " + ((e && (e.name + " " + e.message)) || e));
+    const [t, b] = explain(e); fail(t, b);
+  }
+  $("start").disabled = false;
+}
+function stopAR(){ try { sceneEl.systems["mindar-image-system"].stop(); } catch(e){} clearTimeout(notFoundTimer); }
+
+
+/* ---- memuat A-Frame & MindAR (lokal dulu, lalu beberapa CDN cadangan) ---- */
+const LIBS = {
+  aframe: ["./assets/libs/aframe.min.js",
+           "https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js",
+           "https://unpkg.com/aframe@1.5.0/dist/aframe.min.js",
+           "https://cdnjs.cloudflare.com/ajax/libs/aframe/1.5.0/aframe.min.js"],
+  mindar: ["./assets/libs/mindar-image-aframe.prod.js",
+           "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js",
+           "https://unpkg.com/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"]
+};
+function loadScript(src, ms){
+  return new Promise((resolve, reject) => {
+    const el = document.createElement("script"); el.src = src; el.async = false;
+    const timer = setTimeout(() => { el.remove(); reject(new Error("timeout")); }, ms);
+    el.onload = () => { clearTimeout(timer); resolve(); };
+    el.onerror = () => { clearTimeout(timer); el.remove(); reject(new Error("gagal dimuat")); };
+    document.head.appendChild(el);
+  });
+}
+async function loadFirst(name, list, ok, ms){
+  for (const src of list){
+    const host = src.startsWith(".") ? "lokal" : new URL(src).host;
+    log("memuat " + name + " (" + host + ")…");
+    try { await loadScript(src, ms); if (ok()) { log(name + " siap (" + host + ")"); return; } log(name + " termuat tapi belum aktif"); }
+    catch (e) { log(name + " " + host + ": " + e.message); }
+  }
+  throw new Error("lib-gagal:" + name);
+}
+async function boot(){
+  const btn = $("start"); btn.disabled = true; btn.textContent = "Memuat AR…";
+  try {
+    await loadFirst("A-Frame", LIBS.aframe, () => window.AFRAME, 15000);
+    await loadFirst("MindAR", LIBS.mindar, () => window.AFRAME.systems && window.AFRAME.systems["mindar-image-system"], 45000);
+    const host = document.createElement("div"); host.innerHTML = $("scene-tpl").innerHTML.trim();
+    sceneEl = host.firstElementChild; document.body.prepend(sceneEl);
+    wireTargets(); wireScene();
+    btn.disabled = false; btn.textContent = "Pindai Sekarang";
+  } catch (e) {
+    btn.textContent = "Pindai Sekarang";
+    showSheet("Library AR gagal dimuat",
+      "Browser tidak bisa mengunduh A-Frame atau MindAR. Coba ganti jaringan (Wi-Fi atau data seluler) lalu muat ulang halaman.",
+      "Muat ulang", () => location.reload());
+  }
+}
+
+$("start").onclick = startAR;
+$("identify").onclick = () => {
+  const c = CONFIG.cards[activeIndex]; if (!c) return;
+  if (CONFIG.detailUrl) { stopAR(); location.href = CONFIG.detailUrl + "?id=" + encodeURIComponent(c.id); }
+  else showSheet(c.name + " terdeteksi", "Halaman Detail Arca belum disambungkan. Isi CONFIG.detailUrl untuk membukanya otomatis.", "Tutup");
+};
+window.addEventListener("pagehide", stopAR);
+boot();
+</script>
+</body>
+</html>
